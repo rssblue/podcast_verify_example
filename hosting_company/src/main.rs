@@ -44,7 +44,7 @@ const CUSTOMER_ALICE: Customer = Customer {
     password: "password123",
 };
 const PODCAST_ALICE: Podcast = Podcast {
-    title: "Alice Podcast",
+    title: "Alice's Podcast",
     slug: "alice-podcast",
     owner: CUSTOMER_ALICE,
 };
@@ -54,7 +54,7 @@ const CUSTOMER_BOB: Customer = Customer {
     password: "password456",
 };
 const PODCAST_BOB: Podcast = Podcast {
-    title: "Bob Podcast",
+    title: "Bob's Podcast",
     slug: "bob-podcast",
     owner: CUSTOMER_BOB,
 };
@@ -63,7 +63,9 @@ static PODCASTS: &[&Podcast] = &[&PODCAST_ALICE, &PODCAST_BOB];
 
 #[tokio::main]
 async fn main() {
-    let router = Router::new().route("/feed/:slug", get(feed));
+    let router = Router::new()
+        .route("/", get(root))
+        .route("/feed/:slug", get(feed));
 
     let port = 8081;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -77,10 +79,40 @@ async fn main() {
 async fn feed(
     Path(slug): Path<String>,
 ) -> Result<(TypedHeader<ContentType>, impl IntoResponse), StatusCode> {
-    let podcast = PODCASTS
-        .iter()
-        .find(|podcast| podcast.slug == slug)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let podcast = slug_to_podcast(&slug).ok_or(StatusCode::NOT_FOUND)?;
 
     Ok((TypedHeader(ContentType::xml()), podcast.feed()))
+}
+
+fn slug_to_podcast(slug: &str) -> Option<&Podcast> {
+    PODCASTS
+        .iter()
+        .find(|podcast| podcast.slug == slug)
+        .copied()
+}
+
+async fn root() -> impl IntoResponse {
+    Html(html! {
+        <h1>"Hosting Company"</h1>
+        <p>"Podcasts we host:"</p>
+        <ul>
+        {
+            let mut my_html = vec![];
+            for podcast in PODCASTS {
+                my_html.push(html! {
+                    <li>
+                        <a
+                            href=format!("/feed/{}", podcast.slug)
+                            rel="noreferrer"
+                            target="_blank"
+                            >
+                            {podcast.title}
+                        </a>
+                    </li>
+                });
+            }
+            my_html.join("")
+        }
+        </ul>
+    })
 }
