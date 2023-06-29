@@ -261,7 +261,7 @@ async fn verify(
                     }
                     </datalist>
 
-                    <label for="password">"Password"</label>
+                    <label for="password">"Password ("<a href="https://github.com/rssblue/podcast_verify_example#login" rel="noreferrer" target="_blank">"hint"</a>")"</label>
                     <input type="password" id="password" name="password" autocomplete="off"/>
 
                     <button type="submit">"Verify"</button>
