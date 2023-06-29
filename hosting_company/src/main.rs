@@ -167,8 +167,22 @@ async fn verify(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     params: Query<VerifyParams>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let podcast = slug_to_podcast(state.podcasts, &slug).ok_or(StatusCode::NOT_FOUND)?;
+) -> impl IntoResponse {
+    let podcast = match slug_to_podcast(state.podcasts, &slug) {
+        Some(podcast) => podcast,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                base_html(
+                    "Not Found",
+                    html! {
+                        <h1>"Not Found"</h1>
+                        <p>"No podcast with slug " <code>{slug}</code> " found."</p>
+                    },
+                ),
+            )
+        }
+    };
     let title = format!("Verify ownership of “{}”", podcast.title);
 
     let params: VerifyParams = params.0;
@@ -176,58 +190,70 @@ async fn verify(
     let encrypted_string = match params.encrypted_string {
         Some(encrypted_string) => encrypted_string,
         None => {
-            return Ok(base_html(
-                &title,
-                html! {
-                    <h1>{title.clone()}</h1>
-                    {error(html!{ "Parameter " <code>"encryptedString"</code> " is required." })}
-                },
-            ))
+            return (
+                StatusCode::BAD_REQUEST,
+                base_html(
+                    &title,
+                    html! {
+                        <h1>{title.clone()}</h1>
+                        {error(html!{ "Parameter " <code>"encryptedString"</code> " is required." })}
+                    },
+                ),
+            )
         }
     };
 
     let return_url = match params.return_url {
         Some(return_url) => return_url,
         None => {
-            return Ok(base_html(
-                &title,
-                html! {
-                    <h1>{title.clone()}</h1>
-                    {error(html!{ "Parameter " <code>"returnUrl"</code> " is required." })}
-                },
-            ))
+            return (
+                StatusCode::BAD_REQUEST,
+                base_html(
+                    &title,
+                    html! {
+                        <h1>{title.clone()}</h1>
+                        {error(html!{ "Parameter " <code>"returnUrl"</code> " is required." })}
+                    },
+                ),
+            )
         }
     };
 
     let return_url = match Url::parse(&return_url) {
         Ok(url) => url,
         Err(_) => {
-            return Ok(base_html(
-                &title,
-                html! {
-                    <h1>{title.clone()}</h1>
-                    {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
-                },
-            ))
+            return (
+                StatusCode::BAD_REQUEST,
+                base_html(
+                    &title,
+                    html! {
+                        <h1>{title.clone()}</h1>
+                        {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
+                    },
+                ),
+            )
         }
     };
 
-    Ok(base_html(
-        &title,
-        html! {
-            <h1>{&title}</h1>
-            <form method="POST" autocomplete="off">
-                <input autocomplete="false" name="hidden" type="text" style="display:none;" />
+    (
+        StatusCode::OK,
+        base_html(
+            &title,
+            html! {
+                <h1>{&title}</h1>
+                <form method="POST" autocomplete="off">
+                    <input autocomplete="false" name="hidden" type="text" style="display:none;" />
 
-                <label for="email">"Email"</label>
-                <input type="email" id="email" name="email" autocomplete="off"/>
-                <label for="password">"Password"</label>
-                <input type="password" id="password" name="password" autocomplete="off"/>
+                    <label for="email">"Email"</label>
+                    <input type="email" id="email" name="email" autocomplete="off"/>
+                    <label for="password">"Password"</label>
+                    <input type="password" id="password" name="password" autocomplete="off"/>
 
-                <button type="submit">"Verify"</button>
-            </form>
-        },
-    ))
+                    <button type="submit">"Verify"</button>
+                </form>
+            },
+        ),
+    )
 }
 
 fn base_html(title: &str, body: String) -> Html<String> {
