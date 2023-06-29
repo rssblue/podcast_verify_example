@@ -2,6 +2,7 @@ use axum::extract::State;
 use axum::response::{Html, IntoResponse};
 use axum::{
     extract::Path,
+    extract::Query,
     headers::ContentType,
     http::StatusCode,
     routing::{get, post},
@@ -10,7 +11,17 @@ use axum::{
 use html_to_string_macro::html;
 use rsa::pkcs8::LineEnding;
 use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey, RsaPublicKey};
+use serde::Deserialize;
 use std::net::SocketAddr;
+use url::Url;
+
+#[derive(Deserialize, Debug)]
+struct VerifyParams {
+    #[serde(default, rename = "encryptedString")]
+    encrypted_string: Option<String>,
+    #[serde(default, rename = "returnUrl")]
+    return_url: Option<String>,
+}
 
 #[derive(Clone)]
 struct Customer {
@@ -94,6 +105,7 @@ async fn main() {
     let router = Router::new()
         .route("/", get(root))
         .route("/feed/:slug", get(feed))
+        .route("/feed/:slug/verify", get(verify))
         .with_state(AppState {
             podcasts,
             public_key,
@@ -149,4 +161,98 @@ async fn root(State(state): State<AppState>) -> impl IntoResponse {
         }
         </ul>
     })
+}
+
+async fn verify(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    params: Query<VerifyParams>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let podcast = slug_to_podcast(state.podcasts, &slug).ok_or(StatusCode::NOT_FOUND)?;
+    let title = format!("Verify ownership of “{}”", podcast.title);
+
+    let params: VerifyParams = params.0;
+
+    let encrypted_string = match params.encrypted_string {
+        Some(encrypted_string) => encrypted_string,
+        None => {
+            return Ok(base_html(
+                &title,
+                html! {
+                    <h1>{title.clone()}</h1>
+                    {error(html!{ "Parameter " <code>"encryptedString"</code> " is required." })}
+                },
+            ))
+        }
+    };
+
+    let return_url = match params.return_url {
+        Some(return_url) => return_url,
+        None => {
+            return Ok(base_html(
+                &title,
+                html! {
+                    <h1>{title.clone()}</h1>
+                    {error(html!{ "Parameter " <code>"returnUrl"</code> " is required." })}
+                },
+            ))
+        }
+    };
+
+    let return_url = match Url::parse(&return_url) {
+        Ok(url) => url,
+        Err(_) => {
+            return Ok(base_html(
+                &title,
+                html! {
+                    <h1>{title.clone()}</h1>
+                    {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
+                },
+            ))
+        }
+    };
+
+    Ok(base_html(
+        &title,
+        html! {
+            <h1>{&title}</h1>
+            <form method="POST" autocomplete="off">
+                <input autocomplete="false" name="hidden" type="text" style="display:none;" />
+
+                <label for="email">"Email"</label>
+                <input type="email" id="email" name="email" autocomplete="off"/>
+                <label for="password">"Password"</label>
+                <input type="password" id="password" name="password" autocomplete="off"/>
+
+                <button type="submit">"Verify"</button>
+            </form>
+        },
+    ))
+}
+
+fn base_html(title: &str, body: String) -> Html<String> {
+    Html(html! {
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="UTF-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <link rel="stylesheet" href="https://unpkg.com/mvp.css" />
+
+                <title>{title}</title>
+            </head>
+            <body>
+                <main>
+                    {body}
+                </main>
+            </body>
+        </html>
+    })
+}
+
+fn error(message: String) -> String {
+    html! {
+        <h2 style="color: crimson;">"Error"</h2>
+        <p>{message}</p>
+    }
 }
