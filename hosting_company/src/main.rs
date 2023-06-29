@@ -45,7 +45,7 @@ impl Podcast {
   <channel>
     <title>{}</title>
     <podcast:verify
-      verifyUrl=\"http://localhost:8081/verify/{}\"
+      verifyUrl=\"http://localhost:8081/feed/{}/verify\"
       publicKey=\"{}\"
       />
   </channel>
@@ -138,29 +138,33 @@ fn slug_to_podcast(podcasts: Vec<Podcast>, slug: &str) -> Option<Podcast> {
 }
 
 async fn root(State(state): State<AppState>) -> impl IntoResponse {
-    Html(html! {
-        <h1>"Hosting Company"</h1>
-        <p>"Podcasts we host:"</p>
-        <ul>
-        {
-            let mut my_html = vec![];
-            for podcast in state.podcasts {
-                my_html.push(html! {
-                    <li>
-                        <a
-                            href=format!("/feed/{}", podcast.slug)
-                            rel="noreferrer"
-                            target="_blank"
-                            >
-                            {podcast.title}
-                        </a>
-                    </li>
-                });
+    let title = "Hosting Company";
+    base_html(
+        title,
+        html! {
+            <h1>{title}</h1>
+            <p>"Podcasts we host:"</p>
+            <ul>
+            {
+                let mut my_html = vec![];
+                for podcast in state.podcasts {
+                    my_html.push(html! {
+                        <li>
+                            <a
+                                href=format!("/feed/{}", podcast.slug)
+                                rel="noreferrer"
+                                target="_blank"
+                                >
+                                {podcast.title}
+                            </a>
+                        </li>
+                    });
+                }
+                my_html.join("")
             }
-            my_html.join("")
-        }
-        </ul>
-    })
+            </ul>
+        },
+    )
 }
 
 async fn verify(
@@ -196,7 +200,7 @@ async fn verify(
                     &title,
                     html! {
                         <h1>{title.clone()}</h1>
-                        {error(html!{ "Parameter " <code>"encryptedString"</code> " is required." })}
+                        {error(html!{ "URL parameter " <code>"encryptedString"</code> " is required." })}
                     },
                 ),
             )
@@ -212,7 +216,7 @@ async fn verify(
                     &title,
                     html! {
                         <h1>{title.clone()}</h1>
-                        {error(html!{ "Parameter " <code>"returnUrl"</code> " is required." })}
+                        {error(html!{ "URL parameter " <code>"returnUrl"</code> " is required." })}
                     },
                 ),
             )
