@@ -15,6 +15,8 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use url::Url;
 
+mod view;
+
 #[derive(Deserialize, Debug)]
 struct VerifyParams {
     #[serde(default, rename = "encryptedString")]
@@ -31,7 +33,7 @@ struct Customer {
 }
 
 #[derive(Clone)]
-struct Podcast {
+pub struct Podcast {
     title: String,
     slug: String,
     owner: Customer,
@@ -139,120 +141,47 @@ fn slug_to_podcast(podcasts: Vec<Podcast>, slug: &str) -> Option<Podcast> {
 }
 
 async fn root(State(state): State<AppState>) -> impl IntoResponse {
-    let title = "Hosting Company";
-    base_html(
-        title,
-        html! {
-            <h1>{title}</h1>
-            <p>"Podcasts we host:"</p>
-            <ul>
-            {
-                let mut my_html = vec![];
-                for podcast in state.podcasts {
-                    my_html.push(html! {
-                        <li>
-                            <a
-                                href=format!("/feed/{}", podcast.slug)
-                                rel="noreferrer"
-                                target="_blank"
-                                >
-                                {podcast.title}
-                            </a>
-                        </li>
-                    });
-                }
-                my_html.join("")
-            }
-            </ul>
-        },
-    )
+    view::root(state.podcasts)
 }
 
 async fn verify(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     params: Query<VerifyParams>,
-) -> impl IntoResponse {
-    let podcast = match slug_to_podcast(state.podcasts.clone(), &slug) {
-        Some(podcast) => podcast,
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                base_html(
-                    "Not Found",
-                    html! {
-                        <h1>"Not Found"</h1>
-                        <p>"No podcast with slug " <code>{slug}</code> " found."</p>
-                    },
-                ),
-            )
-        }
-    };
-    let title = format!("Verify ownership of “{}”", podcast.title);
-
+) -> (StatusCode, Html<String>) {
     let params: VerifyParams = params.0;
-
-    let encrypted_string = match params.encrypted_string {
-        Some(encrypted_string) => encrypted_string,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                base_html(
-                    &title,
-                    html! {
-                        <h1>{title.clone()}</h1>
-                        {error(html!{ "URL parameter " <code>"encryptedString"</code> " is required." })}
-                    },
-                ),
-            )
-        }
-    };
 
     let return_url = match params.return_url {
         Some(return_url) => return_url,
         None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                base_html(
-                    &title,
-                    html! {
-                        <h1>{title.clone()}</h1>
-                        {error(html!{ "URL parameter " <code>"returnUrl"</code> " is required." })}
-                    },
-                ),
-            )
+            return view::verify(view::VerifyState::Error {
+                podcast: None,
+                return_url: None,
+                message: html! { "URL parameter " <code>"returnUrl"</code> " is required." },
+                code: StatusCode::BAD_REQUEST,
+            })
         }
     };
-
     let return_url = match Url::parse(&return_url) {
         Ok(url) => url,
         Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                base_html(
-                    &title,
-                    html! {
-                        <h1>{title.clone()}</h1>
-                        {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
-                    },
-                ),
-            )
+            return view::verify(view::VerifyState::Error {
+                podcast: None,
+                return_url: None,
+                message: html! { "Invalid " <code>"returnUrl"</code> "." },
+                code: StatusCode::BAD_REQUEST,
+            })
         }
     };
-
     let domain_name = match return_url.host_str() {
         Some(domain_name) => domain_name,
         None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                base_html(
-                    &title,
-                    html! {
-                        <h1>{title.clone()}</h1>
-                        {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
-                    },
-                ),
-            )
+            return view::verify(view::VerifyState::Error {
+                podcast: None,
+                return_url: None,
+                message: html! { "Invalid " <code>"returnUrl"</code> "." },
+                code: StatusCode::BAD_REQUEST,
+            })
         }
     };
     let domain_name = match return_url.port() {
@@ -260,72 +189,34 @@ async fn verify(
         None => domain_name.to_string(),
     };
 
-    let title = html! {
-        "Log in to verify ownership of “" {podcast.title} "” to " <a href={format!("{}://{}", return_url.scheme(), domain_name)} rel="noreferrer" target="_blank">{domain_name}</a>
+    let podcast = match slug_to_podcast(state.podcasts.clone(), &slug) {
+        Some(podcast) => podcast,
+        None => {
+            return view::verify(view::VerifyState::Error {
+                podcast: None,
+                return_url: Some(return_url),
+                message: html! { "Podcast with slug " <code>{&slug}</code> " not found." },
+                code: StatusCode::NOT_FOUND,
+            })
+        }
     };
 
-    (
-        StatusCode::OK,
-        base_html(
-            &title,
-            html! {
-                <h1>{&title}</h1>
-                <form method="POST" autocomplete="off">
-                    <input autocomplete="false" name="hidden" type="text" style="display:none;" />
+    let encrypted_string = match params.encrypted_string {
+        Some(encrypted_string) => encrypted_string,
+        None => {
+            return view::verify(view::VerifyState::Error {
+                podcast: Some(podcast),
+                return_url: Some(return_url),
+                message: html! { "URL parameter " <code>"encryptedString"</code> " is required." },
+                code: StatusCode::BAD_REQUEST,
+            })
+        }
+    };
 
-                    <label for="email">"Email"</label>
-                    <input type="email" list="email-list" id="email" name="email" autocomplete="off"/>
-                    <datalist id="email-list">
-                    {
-                        state.podcasts.iter().map(|podcast| {
-                            html! {
-                                <option value={podcast.owner.email.to_string()} />
-                            }
-                        }).collect::<Vec<_>>().join("")
-                    }
-                    </datalist>
-
-                    <label for="password">"Password ("<a href="https://github.com/rssblue/podcast_verify_example#login" rel="noreferrer" target="_blank">"hint"</a>")"</label>
-                    <input type="password" id="password" name="password" autocomplete="off"/>
-
-                    <button type="submit">"Log in"</button>
-                </form>
-            },
-        ),
-    )
-}
-
-fn base_html(title: &str, main: String) -> Html<String> {
-    Html(html! {
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="UTF-8"/>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                <link rel="stylesheet" href="https://unpkg.com/mvp.css" />
-
-                <title>{dissolve::strip_html_tags(title).join("")}</title>
-            </head>
-            <body>
-                <header>
-                    <nav>
-                        <span>"🔵 Hosting Company"</span>
-                        <ul>
-                            <li><a href="/">"Home"</a></li>
-                        </ul>
-                    </nav>
-                </header>
-                <main>
-                    {main}
-                </main>
-            </body>
-        </html>
+    view::verify(view::VerifyState::Neutral {
+        podcasts: state.podcasts.clone(),
+        podcast,
+        return_url_scheme: return_url.scheme().to_string(),
+        return_url_domain: domain_name,
     })
-}
-
-fn error(message: String) -> String {
-    html! {
-        <h2 style="color: crimson;">"Error"</h2>
-        <p>{message}</p>
-    }
 }
