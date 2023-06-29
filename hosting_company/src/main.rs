@@ -240,6 +240,30 @@ async fn verify(
         }
     };
 
+    let domain_name = match return_url.host_str() {
+        Some(domain_name) => domain_name,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                base_html(
+                    &title,
+                    html! {
+                        <h1>{title.clone()}</h1>
+                        {error(html!{ "Invalid " <code>"returnUrl"</code> "." })}
+                    },
+                ),
+            )
+        }
+    };
+    let domain_name = match return_url.port() {
+        Some(port) => format!("{}:{}", domain_name, port),
+        None => domain_name.to_string(),
+    };
+
+    let title = html! {
+        "Log in to verify ownership of “" {podcast.title} "” to " <a href={format!("{}://{}", return_url.scheme(), domain_name)} rel="noreferrer" target="_blank">{domain_name}</a>
+    };
+
     (
         StatusCode::OK,
         base_html(
@@ -264,7 +288,7 @@ async fn verify(
                     <label for="password">"Password ("<a href="https://github.com/rssblue/podcast_verify_example#login" rel="noreferrer" target="_blank">"hint"</a>")"</label>
                     <input type="password" id="password" name="password" autocomplete="off"/>
 
-                    <button type="submit">"Verify"</button>
+                    <button type="submit">"Log in"</button>
                 </form>
             },
         ),
@@ -280,7 +304,7 @@ fn base_html(title: &str, main: String) -> Html<String> {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <link rel="stylesheet" href="https://unpkg.com/mvp.css" />
 
-                <title>{title}</title>
+                <title>{dissolve::strip_html_tags(title).join("")}</title>
             </head>
             <body>
                 <header>

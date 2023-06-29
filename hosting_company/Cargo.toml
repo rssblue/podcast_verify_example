@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = {version="0.6.18", features=["macros", "headers"]}
+dissolve = "0.2.2"
 html-to-string-macro = "0.2.5"
 pkcs8 = "0.10.2"
 rand = "0.8.5"
