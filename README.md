@@ -8,7 +8,7 @@ cargo run --manifest-path hosting_company/Cargo.toml
 
 ## Login
 
-| Email address       | Password      |
-|---------------------|---------------|
-| `alice@example.com` | `password123` |
-| `bob@example.com`   | `password456` |
+| Email address       | Password      | Podcast feed URL                                                                       |
+|---------------------|---------------|----------------------------------------------------------------------------------------|
+| `alice@example.com` | `password123` | [http://localhost:8081/feed/alice-podcast](`http://localhost:8081/feed/alice-podcast`) |
+| `bob@example.com`   | `password456` | [http://localhost:8081/feed/bob-podcast](`http://localhost:8081/feed/bob-podcast`)     |
