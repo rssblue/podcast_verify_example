@@ -260,7 +260,7 @@ async fn verify(
     )
 }
 
-fn base_html(title: &str, body: String) -> Html<String> {
+fn base_html(title: &str, main: String) -> Html<String> {
     Html(html! {
         <!DOCTYPE html>
         <html>
@@ -272,8 +272,16 @@ fn base_html(title: &str, body: String) -> Html<String> {
                 <title>{title}</title>
             </head>
             <body>
+                <header>
+                    <nav>
+                        <span>"🔵 Hosting Company"</span>
+                        <ul>
+                            <li><a href="/">"Home"</a></li>
+                        </ul>
+                    </nav>
+                </header>
                 <main>
-                    {body}
+                    {main}
                 </main>
             </body>
         </html>
