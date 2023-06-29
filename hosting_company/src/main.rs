@@ -106,6 +106,7 @@ async fn main() {
         .route("/", get(root))
         .route("/feed/:slug", get(feed))
         .route("/feed/:slug/verify", get(verify))
+        .route("/feed/:slug/verify", post(verify))
         .with_state(AppState {
             podcasts,
             public_key,
@@ -172,7 +173,7 @@ async fn verify(
     Path(slug): Path<String>,
     params: Query<VerifyParams>,
 ) -> impl IntoResponse {
-    let podcast = match slug_to_podcast(state.podcasts, &slug) {
+    let podcast = match slug_to_podcast(state.podcasts.clone(), &slug) {
         Some(podcast) => podcast,
         None => {
             return (
@@ -249,7 +250,17 @@ async fn verify(
                     <input autocomplete="false" name="hidden" type="text" style="display:none;" />
 
                     <label for="email">"Email"</label>
-                    <input type="email" id="email" name="email" autocomplete="off"/>
+                    <input type="email" list="email-list" id="email" name="email" autocomplete="off"/>
+                    <datalist id="email-list">
+                    {
+                        state.podcasts.iter().map(|podcast| {
+                            html! {
+                                <option value={podcast.owner.email.to_string()} />
+                            }
+                        }).collect::<Vec<_>>().join("")
+                    }
+                    </datalist>
+
                     <label for="password">"Password"</label>
                     <input type="password" id="password" name="password" autocomplete="off"/>
 
